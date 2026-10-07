@@ -32,6 +32,17 @@ jobs:
           npm ci && npm run build
           cp dist/index.html dist/404.html
 
+      - name: Run tests
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:coverage
+
+      - name: Update coverage
+        run: |
+          coverage=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+          color=$(echo "$coverage < 80" | bc | awk '{if ($1) print "red"; else print "green"}')
+          curl -s -X POST "https://pizza-factory.cs329.click/api/badge/${{ secrets.NET_ID }}/jwtpizzacoverage?label=Coverage&value=$coverage%25&color=$color" -H "authorization: bearer ${{ secrets.FACTORY_API_KEY }}"
+
       - name: Update pages artifact
         uses: actions/upload-pages-artifact@v5.0.0
         with:
@@ -49,3 +60,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5.0.1
+
+      
