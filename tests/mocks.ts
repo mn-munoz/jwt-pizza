@@ -124,11 +124,24 @@ export async function mockUsers(page: Page, state: MockState) {
   });
 
   await page.route(/\/api\/user\/\d+$/, async (route) => {
-    if (route.request().method() !== 'DELETE') {
-      await route.fallback();
+    const method = route.request().method();
+    const id = route.request().url().split('/').pop();
+    if (method === 'PUT') {
+      // Like the service: only the fields that are sent get changed
+      const { name, email, password } = route.request().postDataJSON();
+      const existing = Object.values(state.users).find((user) => user.id === id);
+      if (!existing) {
+        await route.fulfill({ status: 404, json: { message: 'unknown user' } });
+        return;
+      }
+      const updated = { ...existing, ...(name && { name }), ...(email && { email }), ...(password && { password }) };
+      state.users = Object.fromEntries(Object.values(state.users).map((user) => (user.id === id ? updated : user)).map((user) => [user.email, user]));
+      if (state.loggedInUser?.id === id) state.loggedInUser = withoutTestFields(updated);
+      await route.fulfill({ json: { user: withoutTestFields(updated), token: authToken } });
       return;
     }
-    const id = route.request().url().split('/').pop();
+
+    expect(method).toBe('DELETE');
     state.users = Object.fromEntries(Object.entries(state.users).filter(([, user]) => user.id !== id));
     await route.fulfill({ json: { deleted: true } });
   });
