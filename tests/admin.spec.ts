@@ -1,6 +1,10 @@
+import { Page } from '@playwright/test';
 import { test, expect } from './testSetup';
 import { basicInit, franchises, stores, users } from './mocks';
 import { clickCloseOnRow, expectRequest, login, openAdminDashboard } from './helpers';
+
+const franchisesTableOf = (page: Page) => page.getByRole('table').filter({ has: page.getByRole('columnheader', { name: 'Franchisee' }) });
+const usersTableOf = (page: Page) => page.getByRole('table').filter({ has: page.getByRole('columnheader', { name: 'Email' }) });
 
 test.describe('admin dashboard', () => {
   test.beforeEach(async ({ page }) => {
@@ -53,6 +57,57 @@ test.describe('admin dashboard', () => {
     await expect(page.getByRole('cell', { name: lotaPizza.name })).toBeVisible();
   });
 
+  test('list users', async ({ page }) => {
+    const request = page.waitForRequest((req) => req.method() === 'GET' && new URL(req.url()).pathname === '/api/user');
+    await openAdminDashboard(page);
+    expect(new URL((await request).url()).searchParams.get('name')).toBe('*');
+
+    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
+    const usersTable = usersTableOf(page);
+    await expect(usersTable.getByRole('columnheader')).toHaveText(['Name', 'Email', 'Role', 'Action']);
+
+    for (const user of Object.values(users)) {
+      const row = usersTable.getByRole('row').filter({ hasText: user.email });
+      await expect(row.getByRole('cell')).toHaveText([user.name, user.email, user.roles.map((r) => r.role).join(', '), 'Delete']);
+    }
+    await expect(usersTable.locator('tbody tr')).toHaveCount(Object.keys(users).length);
+  });
+
+  test('delete user', async ({ page }) => {
+    const { diner } = users;
+    await openAdminDashboard(page);
+    const usersTable = usersTableOf(page);
+    await expect(usersTable.getByRole('row').filter({ hasText: diner.email })).toBeVisible();
+
+    await usersTable.getByRole('row').filter({ hasText: diner.email }).getByRole('button', { name: 'Delete' }).click();
+
+    await expect(page.getByText('Delete user')).toBeVisible();
+    await expect(page.getByRole('main')).toContainText(`Are you sure you want to delete the user ${diner.name} (${diner.email})?`);
+    await expectRequest(page, 'DELETE', `/api/user/${diner.id}`, () => page.getByRole('button', { name: 'Delete' }).click());
+
+    await expect(page.getByText("Mama Ricci's kitchen")).toBeVisible();
+    await expect(usersTable.getByRole('row').filter({ hasText: diner.email })).not.toBeVisible();
+    await expect(usersTable.getByRole('row').filter({ hasText: users.franchisee.email })).toBeVisible();
+    await expect(usersTable.locator('tbody tr')).toHaveCount(Object.keys(users).length - 1);
+  });
+
+  test('cancel deleting a user', async ({ page }) => {
+    const { diner } = users;
+    let deleteRequested = false;
+    page.on('request', (req) => {
+      if (req.method() === 'DELETE' && new URL(req.url()).pathname.startsWith('/api/user/')) deleteRequested = true;
+    });
+    await openAdminDashboard(page);
+    await page.getByRole('row').filter({ hasText: diner.email }).getByRole('button', { name: 'Delete' }).click();
+
+    await expect(page.getByText('Delete user')).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(page.getByText("Mama Ricci's kitchen")).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: diner.email })).toBeVisible();
+    expect(deleteRequested).toBe(false);
+  });
+
   test('page through franchises', async ({ page }) => {
     // Replace the franchise list mock with one that has two pages
     await page.route(/\/api\/franchise(\?.*)?$/, async (route) => {
@@ -63,17 +118,63 @@ test.describe('admin dashboard', () => {
       await route.fulfill({ json: franchiseRes });
     });
     await openAdminDashboard(page);
+    const franchisesTable = franchisesTableOf(page);
 
     await expect(page.getByRole('cell', { name: franchises.lotaPizza.name })).toBeVisible();
-    await expect(page.getByRole('button', { name: '«' })).toBeDisabled();
-    await page.getByRole('button', { name: '»' }).click();
+    await expect(franchisesTable.getByRole('button', { name: '«' })).toBeDisabled();
+    await franchisesTable.getByRole('button', { name: '»' }).click();
 
     await expect(page.getByRole('cell', { name: 'SliceSquad' })).toBeVisible();
     await expect(page.getByRole('cell', { name: franchises.lotaPizza.name })).not.toBeVisible();
-    await expect(page.getByRole('button', { name: '»' })).toBeDisabled();
-    await page.getByRole('button', { name: '«' }).click();
+    await expect(franchisesTable.getByRole('button', { name: '»' })).toBeDisabled();
+    await franchisesTable.getByRole('button', { name: '«' }).click();
 
     await expect(page.getByRole('cell', { name: franchises.lotaPizza.name })).toBeVisible();
+  });
+
+  test('filter users', async ({ page }) => {
+    await openAdminDashboard(page);
+    const usersTable = usersTableOf(page);
+    await expect(usersTable.locator('tbody tr')).toHaveCount(Object.keys(users).length);
+
+    await usersTable.getByPlaceholder('Filter users').fill('kai');
+    const request = await expectRequest(page, 'GET', '/api/user', () => usersTable.getByRole('button', { name: 'Submit' }).click());
+    expect(new URL(request.url()).searchParams.get('name')).toBe('*kai*');
+    expect(new URL(request.url()).searchParams.get('page')).toBe('0');
+
+    await expect(usersTable.locator('tbody tr')).toHaveCount(1);
+    await expect(usersTable.getByRole('cell', { name: users.diner.email })).toBeVisible();
+    await expect(usersTable.getByRole('cell', { name: users.admin.email })).not.toBeVisible();
+
+    // An empty filter shows everyone again
+    await usersTable.getByPlaceholder('Filter users').fill('');
+    await usersTable.getByRole('button', { name: 'Submit' }).click();
+    await expect(usersTable.locator('tbody tr')).toHaveCount(Object.keys(users).length);
+  });
+
+  test('page through users', async ({ page }) => {
+    // Replace the user list mock with one that has two pages
+    await page.route(/\/api\/user(\?.*)?$/, async (route) => {
+      const firstPage = new URL(route.request().url()).searchParams.get('page') === '0';
+      const userRes = firstPage
+        ? { users: [users.admin, users.diner], more: true }
+        : { users: [{ id: '6', name: 'Page Two', email: 'p2@jwt.com', roles: [{ role: 'diner' }] }], more: false };
+      await route.fulfill({ json: userRes });
+    });
+    await openAdminDashboard(page);
+    const usersTable = usersTableOf(page);
+
+    await expect(usersTable.getByRole('cell', { name: users.diner.email })).toBeVisible();
+    await expect(usersTable.getByRole('button', { name: '«' })).toBeDisabled();
+    const request = await expectRequest(page, 'GET', '/api/user', () => usersTable.getByRole('button', { name: '»' }).click());
+    expect(new URL(request.url()).searchParams.get('page')).toBe('1');
+
+    await expect(usersTable.getByRole('cell', { name: 'p2@jwt.com' })).toBeVisible();
+    await expect(usersTable.getByRole('cell', { name: users.diner.email })).not.toBeVisible();
+    await expect(usersTable.getByRole('button', { name: '»' })).toBeDisabled();
+    await usersTable.getByRole('button', { name: '«' }).click();
+
+    await expect(usersTable.getByRole('cell', { name: users.diner.email })).toBeVisible();
   });
 });
 

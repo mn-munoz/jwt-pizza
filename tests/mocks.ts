@@ -110,6 +110,30 @@ export async function mockAuth(page: Page, state: MockState) {
   });
 }
 
+export async function mockUsers(page: Page, state: MockState) {
+  await page.route(/\/api\/user(\?.*)?$/, async (route) => {
+    expect(route.request().method()).toBe('GET');
+    // Same name filter as the service: '*' is a wildcard
+    const params = new URL(route.request().url()).searchParams;
+    const nameRegex = new RegExp(`^${(params.get('name') ?? '*').split('*').join('.*')}$`, 'i');
+    const page = Number(params.get('page') ?? 0);
+    const limit = Number(params.get('limit') ?? 10);
+    const matching = Object.values(state.users).filter((user) => nameRegex.test(user.name ?? ''));
+    const pageOfUsers = matching.slice(page * limit, (page + 1) * limit).map(withoutTestFields);
+    await route.fulfill({ json: { users: pageOfUsers, more: matching.length > (page + 1) * limit } });
+  });
+
+  await page.route(/\/api\/user\/\d+$/, async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.fallback();
+      return;
+    }
+    const id = route.request().url().split('/').pop();
+    state.users = Object.fromEntries(Object.entries(state.users).filter(([, user]) => user.id !== id));
+    await route.fulfill({ json: { deleted: true } });
+  });
+}
+
 export async function mockMenu(page: Page) {
   await page.route('*/**/api/order/menu', async (route) => {
     expect(route.request().method()).toBe('GET');
@@ -207,6 +231,7 @@ export async function basicInit(page: Page) {
   };
 
   await mockAuth(page, state);
+  await mockUsers(page, state);
   await mockMenu(page);
   await mockFranchises(page, state);
   await mockOrders(page, state);

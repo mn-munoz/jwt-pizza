@@ -46,9 +46,10 @@ export default function DinerDashboard(props: Props) {
       roles: user.roles,
     };
 
-    await pizzaService.updateUser(updatedUser);
+    // Use the user the service returns so the password never ends up in app state
+    const savedUser = await pizzaService.updateUser(updatedUser);
 
-    props.setUser(updatedUser);
+    props.setUser(savedUser);
     setTimeout(() => {
       HSOverlay.close(document.getElementById("hs-jwt-modal")!);
     }, 100);
