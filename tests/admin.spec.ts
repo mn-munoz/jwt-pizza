@@ -81,6 +81,7 @@ test.describe('admin dashboard', () => {
 
     await usersTable.getByRole('row').filter({ hasText: diner.email }).getByRole('button', { name: 'Delete' }).click();
 
+    await expect(page).toHaveURL(`/admin-dashboard/delete-user?id=${diner.id}`);
     await expect(page.getByText('Delete user')).toBeVisible();
     await expect(page.getByRole('main')).toContainText(`Are you sure you want to delete the user ${diner.name} (${diner.email})?`);
     await expectRequest(page, 'DELETE', `/api/user/${diner.id}`, () => page.getByRole('button', { name: 'Delete' }).click());
@@ -106,6 +107,30 @@ test.describe('admin dashboard', () => {
     await expect(page.getByText("Mama Ricci's kitchen")).toBeVisible();
     await expect(page.getByRole('row').filter({ hasText: diner.email })).toBeVisible();
     expect(deleteRequested).toBe(false);
+  });
+
+  test('delete user fails', async ({ page }) => {
+    const { diner } = users;
+    await page.route(/\/api\/user\/\d+$/, async (route) => {
+      if (route.request().method() !== 'DELETE') return route.fallback();
+      await route.fulfill({ status: 403, json: { message: 'unauthorized' } });
+    });
+    await openAdminDashboard(page);
+    await page.getByRole('row').filter({ hasText: diner.email }).getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete' }).click();
+
+    await expect(page.getByRole('alert')).toHaveText('Unable to delete user: unauthorized');
+    await expect(page.getByText('Delete user', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(usersTableOf(page).getByRole('cell', { name: diner.email })).toBeVisible();
+  });
+
+  test('delete page for unknown user', async ({ page }) => {
+    await openAdminDashboard(page);
+    await page.goto('/admin-dashboard/delete-user?id=999');
+
+    await expect(page.getByRole('alert')).toHaveText('Unable to load user: unknown user');
+    await expect(page.getByRole('button', { name: 'Delete' })).not.toBeVisible();
   });
 
   test('page through franchises', async ({ page }) => {

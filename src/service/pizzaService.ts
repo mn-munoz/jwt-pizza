@@ -104,6 +104,7 @@ interface PizzaService {
   register(name: string, email: string, password: string): Promise<User>;
   logout(): void;
   getUser(): Promise<User | null>;
+  getUserById(userId: string): Promise<User>;
   updateUser(user: User): Promise<User>;
   listUsers(page: number, limit: number, nameFilter: string): Promise<UserList>;
   deleteUser(user: User): Promise<void>;

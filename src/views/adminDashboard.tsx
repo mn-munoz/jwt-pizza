@@ -7,6 +7,9 @@ import { pizzaService } from '../service/service';
 import { Franchise, FranchiseList, Role, Store, User, UserList } from '../service/pizzaService';
 import { TrashIcon } from '../icons';
 
+// Rows shown per page in each of the dashboard's tables
+const PAGE_SIZE = 10;
+
 interface Props {
   user: User | null;
 }
@@ -23,14 +26,14 @@ export default function AdminDashboard(props: Props) {
 
   React.useEffect(() => {
     (async () => {
-      setFranchiseList(await pizzaService.getFranchises(franchisePage, 3, '*'));
+      setFranchiseList(await pizzaService.getFranchises(franchisePage, PAGE_SIZE, '*'));
     })();
   }, [props.user, franchisePage]);
 
   React.useEffect(() => {
     (async () => {
       if (Role.isRole(props.user, Role.Admin)) {
-        setUserList(await pizzaService.listUsers(userPage, 10, userFilter));
+        setUserList(await pizzaService.listUsers(userPage, PAGE_SIZE, userFilter));
       }
     })();
   }, [props.user, userPage, userFilter]);
@@ -48,7 +51,7 @@ export default function AdminDashboard(props: Props) {
   }
 
   function deleteUser(user: User) {
-    navigate('/admin-dashboard/delete-user', { state: { user: user } });
+    navigate(`/admin-dashboard/delete-user?id=${user.id}`);
   }
 
   function filterUsers() {
@@ -57,7 +60,7 @@ export default function AdminDashboard(props: Props) {
   }
 
   async function filterFranchises() {
-    setFranchiseList(await pizzaService.getFranchises(franchisePage, 10, `*${filterFranchiseRef.current?.value}*`));
+    setFranchiseList(await pizzaService.getFranchises(franchisePage, PAGE_SIZE, `*${filterFranchiseRef.current?.value}*`));
   }
 
   let response = <NotFound />;

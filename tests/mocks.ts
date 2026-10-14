@@ -126,6 +126,12 @@ export async function mockUsers(page: Page, state: MockState) {
   await page.route(/\/api\/user\/\d+$/, async (route) => {
     const method = route.request().method();
     const id = route.request().url().split('/').pop();
+    if (method === 'GET') {
+      const user = Object.values(state.users).find((u) => u.id === id);
+      await route.fulfill(user ? { json: withoutTestFields(user) } : { status: 404, json: { message: 'unknown user' } });
+      return;
+    }
+
     if (method === 'PUT') {
       // Like the service: only the fields that are sent get changed
       const { name, email, password } = route.request().postDataJSON();

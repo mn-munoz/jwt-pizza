@@ -4,7 +4,6 @@ import View from "./view";
 import { pizzaService } from "../service/service";
 import { Order, OrderHistory, Role, User } from "../service/pizzaService";
 import { CloseIcon } from "../icons";
-import { HSOverlay } from "preline";
 import Button from "../components/button";
 
 interface Props {
@@ -19,6 +18,7 @@ export default function DinerDashboard(props: Props) {
 
   const user = props.user || ({} as User);
   const [orders, setOrders] = React.useState<Order[]>([]);
+  const [isEditing, setIsEditing] = React.useState(false);
 
   React.useEffect(() => {
     (async () => {
@@ -50,9 +50,7 @@ export default function DinerDashboard(props: Props) {
     const savedUser = await pizzaService.updateUser(updatedUser);
 
     props.setUser(savedUser);
-    setTimeout(() => {
-      HSOverlay.close(document.getElementById("hs-jwt-modal")!);
-    }, 100);
+    setIsEditing(false);
   }
 
   return (
@@ -68,9 +66,7 @@ export default function DinerDashboard(props: Props) {
         <Button
           title="Edit"
           className="w-16 p-0"
-          onPress={() =>
-            HSOverlay.open(document.getElementById("hs-jwt-modal")!)
-          }
+          onPress={() => setIsEditing(true)}
         />
 
         <div className="my-4 text-lg text-orange-200 text-start grid grid-cols-5 gap-2">
@@ -162,63 +158,67 @@ export default function DinerDashboard(props: Props) {
         )}
       </div>
 
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dialog-title"
-        id="hs-jwt-modal"
-        className="hs-overlay hidden size-full fixed top-10 start-0 z-[80] overflow-x-hidden overflow-y-auto pointer-events-none"
-      >
-        <div className="hs-overlay-open:mt-7 hs-overlay-open:opacity-100 hs-overlay-open:duration-500 mt-0 opacity-0 ease-out transition-all sm:max-w-lg sm:w-full m-3 sm:mx-auto min-h-[calc(100%-3.5rem)]">
-          <div className="w-full flex flex-col bg-white border shadow-sm rounded-xl pointer-events-auto   ">
-            <div className="flex justify-between items-center py-3 px-4 border-b bg-slate-200 rounded-t-xl ">
-              <h3 className="font-bold text-gray-800">Edit user</h3>
-              <button
-                type="button"
-                className="flex justify-center items-center size-7 text-sm font-semibold rounded-full border border-transparent text-gray-800 hover:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none"
-                data-hs-overlay="#hs-jwt-modal"
-              >
-                <CloseIcon className="" />
-              </button>
-            </div>
-            <div className="p-4 overflow-y-scroll max-h-52">
-              <div className="my-4 text-lg text-start grid grid-cols-5 gap-2 items-center">
-                <div className="font-semibold">name:</div>
-                <input
-                  type="text"
-                  className="col-span-4 border border-gray-300 rounded-md p-1"
-                  defaultValue={user.name}
-                  ref={nameRef}
-                />
-                <div className="font-semibold">email:</div>
-                <input
-                  type="email"
-                  className="col-span-4 border border-gray-300 rounded-md p-1"
-                  defaultValue={user.email}
-                  ref={emailRef}
-                />
-                <div className="font-semibold">password:</div>
-                <input
-                  id="password"
-                  type="text"
-                  className="col-span-4 border border-gray-300 rounded-md p-1"
-                  defaultValue=""
-                  ref={passwordRef}
-                />
+      {isEditing && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dialog-title"
+          className="size-full fixed top-0 start-0 z-[80] overflow-x-hidden overflow-y-auto bg-gray-900/50"
+        >
+          <div className="mt-16 sm:max-w-lg sm:w-full m-3 sm:mx-auto min-h-[calc(100%-3.5rem)]">
+            <div className="w-full flex flex-col bg-white border shadow-sm rounded-xl pointer-events-auto   ">
+              <div className="flex justify-between items-center py-3 px-4 border-b bg-slate-200 rounded-t-xl ">
+                <h3 id="dialog-title" className="font-bold text-gray-800">
+                  Edit user
+                </h3>
+                <button
+                  type="button"
+                  className="flex justify-center items-center size-7 text-sm font-semibold rounded-full border border-transparent text-gray-800 hover:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none"
+                  aria-label="Close"
+                  onClick={() => setIsEditing(false)}
+                >
+                  <CloseIcon className="" />
+                </button>
               </div>
-            </div>
-            <div className="flex justify-end items-center gap-x-2 py-3 px-4 border-t  bg-slate-200 rounded-b-xl">
-              <button
-                type="button"
-                className="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
-                onClick={updateUser}
-              >
-                Update
-              </button>
+              <div className="p-4 overflow-y-scroll max-h-52">
+                <div className="my-4 text-lg text-start grid grid-cols-5 gap-2 items-center">
+                  <div className="font-semibold">name:</div>
+                  <input
+                    type="text"
+                    className="col-span-4 border border-gray-300 rounded-md p-1"
+                    defaultValue={user.name}
+                    ref={nameRef}
+                  />
+                  <div className="font-semibold">email:</div>
+                  <input
+                    type="email"
+                    className="col-span-4 border border-gray-300 rounded-md p-1"
+                    defaultValue={user.email}
+                    ref={emailRef}
+                  />
+                  <div className="font-semibold">password:</div>
+                  <input
+                    id="password"
+                    type="text"
+                    className="col-span-4 border border-gray-300 rounded-md p-1"
+                    defaultValue=""
+                    ref={passwordRef}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end items-center gap-x-2 py-3 px-4 border-t  bg-slate-200 rounded-b-xl">
+                <button
+                  type="button"
+                  className="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
+                  onClick={updateUser}
+                >
+                  Update
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </View>
   );
 }

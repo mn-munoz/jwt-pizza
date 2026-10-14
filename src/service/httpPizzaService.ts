@@ -94,6 +94,10 @@ class HttpPizzaService implements PizzaService {
     return Promise.resolve(result);
   }
 
+  async getUserById(userId: string): Promise<User> {
+    return this.callEndpoint(`/api/user/${userId}`);
+  }
+
   async updateUser(updatedUser: User): Promise<User> {
     const { user, token } = await this.callEndpoint(
       `/api/user/${updatedUser.id}`,
